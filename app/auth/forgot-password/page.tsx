@@ -1,6 +1,7 @@
 'use client'
 import { LoaderCircle, Mail } from 'lucide-react'
 import { ChangeEvent, FormEvent, useState } from 'react'
+import Link from 'next/link'
 
 function ForgotPassword() {
   const [email, setEmail] = useState('')
@@ -13,19 +14,29 @@ function ForgotPassword() {
     setError('')
   }
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault()
-
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
     if (!email.trim()) {
-      setError('Please enter a valid email.')
-      return
+      setError('Please enter a valid email');
+      return;
     }
-
-    setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      setSuccess(true)
-    }, 2000)
+    try {
+      setLoading(true);
+      const res = await fetch('http://localhost:3000/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.message);
+      }
+      setSuccess(true);
+    } catch(err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -79,12 +90,12 @@ function ForgotPassword() {
 
         {/* Back to Login */}
         <div className="mt-4 text-center">
-          <a
-            href="javascript:void(0)"
+          <Link
+            href="/auth/login"
             className="text-sm font-medium text-blue-600 hover:underline"
           >
             Back to Login
-          </a>
+          </Link>
         </div>
       </div>
     </div>

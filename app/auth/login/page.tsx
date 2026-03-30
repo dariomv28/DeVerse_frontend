@@ -113,9 +113,12 @@ function Login() {
             </div>
             {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
             <div className="mt-2 text-right">
-              <a href="javascript:void(0)" className="text-sm text-blue-600 hover:underline">
+              <Link
+                href="/auth/forgot-password"
+                className="text-sm font-medium text-blue-600 hover:underline"
+              >
                 Forgot Password?
-              </a>
+              </Link>
             </div>
           </div>
 
