@@ -548,6 +548,36 @@ export default function FeedPage() {
     }
   }
 
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return
+    const file = e.target.files[0]
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch(`${API_URL}/users/upload-avatar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const errText = await res.text()
+        alert(`Failed to upload avatar: ${errText}`)
+        return
+      }
+
+      const updatedUser = await res.json()
+      setUser(updatedUser)
+    } catch (error) {
+      console.error('Error uploading avatar:', error)
+      alert('Error uploading avatar')
+    } finally {
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
   const removePostImage = (index: number) => {
     setPostImages(prev => prev.filter((_, i) => i !== index))
   }
@@ -593,6 +623,13 @@ export default function FeedPage() {
             onClick={() => setShowMenu(!showMenu)}
             className="h-10 w-10 rounded-full object-cover cursor-pointer border-2 border-gray-200 hover:border-green-500 transition"
           />
+          <input
+            type="file"
+            ref={fileRef}
+            hidden
+            accept="image/*"
+            onChange={handleAvatarChange}
+          />
 
           {showMenu && (
             <div className="absolute right-0 top-12 mt-2 w-56 bg-white shadow-2xl rounded-xl p-2 z-50 border border-gray-100">
@@ -600,6 +637,14 @@ export default function FeedPage() {
                 <p className="text-sm font-bold truncate text-gray-800">{user?.name}</p>
                 <p className="text-xs text-gray-500 truncate">{user?.email}</p>
               </div>
+              <button
+                onClick={() => {
+                  if (fileRef.current) fileRef.current.click()
+                }}
+                className="w-full text-left px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg cursor-pointer transition"
+              >
+                Upload Avatar
+              </button>
               <button
                 onClick={() => {
                   localStorage.removeItem('token')
