@@ -70,7 +70,7 @@ export default function FeedPage() {
           headers: { Authorization: `Bearer ${token}` },
         })
 
-        if (!res.ok) throw new Error('Failed to fetch user')
+        if (!res.ok) return;
 
         const userData = await res.json()
         setUser(userData)
