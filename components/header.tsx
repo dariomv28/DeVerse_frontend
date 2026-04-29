@@ -15,6 +15,26 @@ type Props = {
   getImageUrl: (path?: string) => string
 }
 
+type Relation = {
+  id: string
+  isFollowing: boolean
+  isFriend: boolean
+  friendRequestStatus: 'none' | 'sent' | 'received'
+  friendRequestId: string | null
+}
+
+type Result = {
+  _id: string
+  name?: string
+  email?: string
+  avatar?: string
+  isFollowing?: boolean
+  isFriend?: boolean
+  friendRequestStatus?: 'none' | 'sent' | 'received'
+  friendRequestId?: string | null
+  [key: string]: any
+}
+
 export default function Header({
   user,
   query,
@@ -26,7 +46,7 @@ export default function Header({
   getImageUrl,
 }: Props) {
   const router = useRouter()
-  const [results, setResults] = useState<any[]>([])
+  const [results, setResults] = useState<Result[]>([])
   const [loadingSearch, setLoadingSearch] = useState(false)
   const mountedRef = useRef(true)
 
@@ -41,11 +61,41 @@ export default function Header({
       })
       const data = await res.json()
       if (!mountedRef.current) return
-      setResults(Array.isArray(data) ? data : [])
+      const users = Array.isArray(data) ? data : []
+      setResults(users as Result[])
+
+      // fetch authoritative relationship statuses for these users
+      const ids = (users as any[]).map(u => u._id).filter(Boolean)
+      if (ids.length > 0) {
+        const rels = await fetchRelations(ids)
+        if (!mountedRef.current) return
+        const relMap = new Map<string, Relation>(rels.map((r: Relation) => [r.id, r]))
+        setResults(prev => prev.map((r: Result) => {
+          const info = relMap.get(r._id)
+          if (!info) return r
+          return { ...r, isFollowing: info.isFollowing, isFriend: info.isFriend, friendRequestStatus: info.friendRequestStatus, friendRequestId: info.friendRequestId }
+        }))
+      }
     } catch (e) {
       console.error('Search error', e)
     } finally {
       setLoadingSearch(false)
+    }
+  }
+
+  const fetchRelations = async (ids: string[]) => {
+    try {
+      const token = getToken()
+      const res = await fetch('http://localhost:3000/users/relations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ids }),
+      })
+      if (!res.ok) return []
+      return await res.json()
+    } catch (e) {
+      console.error('fetchRelations error', e)
+      return []
     }
   }
 
@@ -71,14 +121,14 @@ export default function Header({
     if (!socket) return
 
     const onFollow = (payload: any) => {
-      setResults(prev => prev.map(r => {
+      setResults(prev => prev.map((r: Result) => {
         if (r._id === payload.to) return { ...r, isFollowing: !!payload.following }
         return r
       }))
     }
 
     const onFriendRequest = (payload: any) => {
-      setResults(prev => prev.map(r => {
+      setResults(prev => prev.map((r: Result) => {
         // we sent the request
         if (payload.from === user?._id && r._id === payload.to) {
           return { ...r, friendRequestStatus: 'sent', friendRequestId: payload.requestId }
@@ -94,7 +144,7 @@ export default function Header({
     }
 
     const onFriendCancelled = (payload: any) => {
-      setResults(prev => prev.map(r => {
+      setResults(prev => prev.map((r: Result) => {
         if (payload.from === user?._id && r._id === payload.to) {
           return { ...r, friendRequestStatus: 'none', friendRequestId: null }
         }
@@ -106,7 +156,7 @@ export default function Header({
     }
 
     const onFriendAccepted = (payload: any) => {
-      setResults(prev => prev.map(r => {
+      setResults(prev => prev.map((r: Result) => {
         if (r._id === payload.to || r._id === payload.from) {
           return { ...r, isFriend: true, friendRequestStatus: 'none', friendRequestId: null }
         }
@@ -128,16 +178,17 @@ export default function Header({
   }, [user])
 
   const handleToggleFollow = async (targetId: string, idx: number) => {
-    // optimistic update
-    setResults(prev => prev.map((r, i) => i === idx ? { ...r, isFollowing: !r.isFollowing } : r))
     try {
       const res = await fetch(`http://localhost:3000/users/${targetId}/follow`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
       })
-      const data = await res.json()
-      setResults(prev => prev.map((r, i) => i === idx ? { ...r, isFollowing: !!data.following } : r))
-      // refresh server-driven state for the current query
+      if (!res.ok) {
+        const err = await res.text()
+        console.error('Follow error', err)
+        return
+      }
+      // refresh authoritative data
       if (query && query.trim() !== '') fetchSearch(query)
     } catch (e) {
       console.error(e)
@@ -145,39 +196,39 @@ export default function Header({
   }
 
   const handleAddFriend = async (targetId: string, idx: number) => {
-    // optimistic UI update
-    setResults(prev => prev.map((r, i) => i === idx ? { ...r, friendRequestStatus: 'sent' } : r))
-
     try {
       const res = await fetch(`http://localhost:3000/users/${targetId}/add-friend`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
       })
-      const data = await res.json()
-      const reqId = data && (data._id || data.id || data.requestId) ? (data._id || data.id || data.requestId) : null
-      setResults(prev => prev.map((r, i) => i === idx ? { ...r, friendRequestStatus: 'sent', friendRequestId: reqId } : r))
+      if (!res.ok) {
+        const err = await res.text()
+        console.error('Add friend error', err)
+        return
+      }
+      await res.json()
+      // refresh authoritative data from server
       if (query && query.trim() !== '') fetchSearch(query)
     } catch (e) {
       console.error(e)
-      // rollback UI on error
-      setResults(prev => prev.map((r, i) => i === idx ? { ...r, friendRequestStatus: 'none', friendRequestId: null } : r))
     }
   }
 
   const handleCancelRequest = async (targetId: string, idx: number) => {
-    // optimistic UI
-    setResults(prev => prev.map((r, i) => i === idx ? { ...r, friendRequestStatus: 'none', friendRequestId: null } : r))
-
     try {
-      await fetch(`http://localhost:3000/users/${targetId}/cancel-request`, {
+      const res = await fetch(`http://localhost:3000/users/${targetId}/cancel-request`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
       })
+      if (!res.ok) {
+        const err = await res.text()
+        console.error('Cancel request error', err)
+        return
+      }
+      await res.json()
       if (query && query.trim() !== '') fetchSearch(query)
     } catch (e) {
       console.error(e)
-      // rollback UI on error
-      setResults(prev => prev.map((r, i) => i === idx ? { ...r, friendRequestStatus: 'sent' } : r))
     }
   }
 
@@ -210,9 +261,9 @@ export default function Header({
                   {!r.isFriend && (
                     r.friendRequestStatus === 'sent' ? (
                       <button onClick={() => handleCancelRequest(r._id, idx)} className="px-3 py-1 text-sm bg-gray-100 rounded">Cancel request</button>
-                    ) : (
+                    ) : r.friendRequestStatus === 'none' ? (
                       <button onClick={() => handleAddFriend(r._id, idx)} className="px-3 py-1 text-sm bg-green-500 text-white rounded">Add friend</button>
-                    )
+                    ) : null
                   )}
                   <button onClick={() => handleToggleFollow(r._id, idx)} className={`px-3 py-1 text-sm rounded ${r.isFollowing ? 'bg-gray-100' : 'bg-blue-500 text-white'}`}>
                     {r.isFollowing ? 'Unfollow' : 'Follow'}
