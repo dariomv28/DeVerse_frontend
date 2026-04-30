@@ -31,7 +31,7 @@ export default function FriendRequestItem({ request, onAccept, onReject, process
         <button
           onClick={() => onAccept(request._id)}
           disabled={!!processing}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition ${processing ? 'opacity-60 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer text-sm transition ${processing ? 'opacity-60 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
         >
           <Check size={16} />
           <span>Accept</span>
@@ -40,7 +40,7 @@ export default function FriendRequestItem({ request, onAccept, onReject, process
         <button
           onClick={() => onReject(request._id)}
           disabled={!!processing}
-          className={`p-2 rounded-md transition ${processing ? 'opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-50'}`}
+          className={`p-2 rounded-md cursor-pointer transition ${processing ? 'opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-50'}`}
         >
           <Trash2 size={16} />
         </button>

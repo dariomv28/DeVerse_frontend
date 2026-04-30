@@ -13,7 +13,7 @@ export default function SidebarNavigator({ activeTab, setActiveTab, requestsCoun
     <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 space-y-1 sticky top-24">
       <button
         onClick={() => setActiveTab('home')}
-        className={`flex items-center gap-4 w-full p-3 rounded-xl transition ${
+        className={`flex items-center gap-4 w-full cursor-pointer p-3 rounded-xl transition ${
           activeTab === 'home' ? 'bg-green-50 text-green-700 font-bold' : 'hover:bg-gray-50 text-gray-800'
         }`}
       >
@@ -23,7 +23,7 @@ export default function SidebarNavigator({ activeTab, setActiveTab, requestsCoun
 
       <button
         onClick={() => setActiveTab('requests')}
-        className={`relative flex items-center gap-4 w-full p-3 rounded-xl transition ${
+        className={`relative flex items-center gap-4 cursor-pointer w-full p-3 rounded-xl transition ${
           activeTab === 'requests' ? 'bg-green-50 text-green-700 font-bold' : 'hover:bg-gray-50 text-gray-800'
         }`}
       >
