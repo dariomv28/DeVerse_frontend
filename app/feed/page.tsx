@@ -2,21 +2,12 @@
 import { getSocket } from '@/lib/socket'
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  Home,
-  Bell,
-  MessageCircle,
-  Bookmark,
-  LoaderCircle,
-  Image as ImageIcon,
-  Heart,
-  X,
-  Trash2,
-  Send
-} from 'lucide-react'
+import { LoaderCircle } from 'lucide-react'
 import Header from '@/components/header'
 import CreatePostBox from './components/CreatePostBox'
 import PostList from './components/PostList'
+import SidebarNavigator from './components/SidebarNavigator'
+import FriendRequestsPanel from './components/FriendRequestsPanel'
 
 export default function FeedPage() {
   const router = useRouter()
@@ -38,6 +29,8 @@ export default function FeedPage() {
   // Notifications
   const [requests, setRequests] = useState<any[]>([])
   const [showNoti, setShowNoti] = useState(false)
+  const [activeTab, setActiveTab] = useState<'home' | 'requests'>('home')
+  const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set())
 
   // Posts States
   const [posts, setPosts] = useState<any[]>([])
@@ -184,6 +177,33 @@ export default function FeedPage() {
     };
   }, [user]);
 
+  // Real-time friend-request updates
+  useEffect(() => {
+    if (!user) return
+    const socket = getSocket()
+
+    const handleFriendRequest = (payload: any) => {
+      try {
+        // If this event is related to the current user, refresh incoming requests
+        const to = payload?.to?.toString ? payload.to.toString() : payload?.to
+        const from = payload?.from?.toString ? payload.from.toString() : payload?.from
+        if (to === user._id || from === user._id) fetchRequests()
+      } catch (e) {
+        fetchRequests()
+      }
+    }
+
+    socket.on('friend.request', handleFriendRequest)
+    socket.on('friend.request.cancelled', handleFriendRequest)
+    socket.on('friend.accepted', handleFriendRequest)
+
+    return () => {
+      socket.off('friend.request', handleFriendRequest)
+      socket.off('friend.request.cancelled', handleFriendRequest)
+      socket.off('friend.accepted', handleFriendRequest)
+    }
+  }, [user])
+
   // =====================
   // USER-SCOPED LOCAL STATE
   // =====================
@@ -309,6 +329,68 @@ export default function FeedPage() {
       setRequests(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error fetching requests:', error)
+    }
+  }
+
+  const handleAcceptRequest = async (requestId: string) => {
+    if (!requestId) return
+    setProcessingRequests(prev => {
+      const s = new Set(prev)
+      s.add(requestId)
+      return s
+    })
+
+    try {
+      const res = await fetch(`${API_URL}/users/request/${requestId}/accept`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      })
+
+      if (res.ok) {
+        await fetchRequests()
+      } else {
+        const txt = await res.text()
+        alert(`Accept failed: ${txt}`)
+      }
+    } catch (error) {
+      console.error('Error accepting request:', error)
+    } finally {
+      setProcessingRequests(prev => {
+        const s = new Set(prev)
+        s.delete(requestId)
+        return s
+      })
+    }
+  }
+
+  const handleRejectRequest = async (requestId: string) => {
+    if (!requestId) return
+    setProcessingRequests(prev => {
+      const s = new Set(prev)
+      s.add(requestId)
+      return s
+    })
+
+    try {
+      const res = await fetch(`${API_URL}/users/request/${requestId}/reject`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      })
+
+      if (res.ok) {
+        await fetchRequests()
+      } else {
+        const txt = await res.text()
+        alert(`Reject failed: ${txt}`)
+      }
+    } catch (error) {
+      console.error('Error rejecting request:', error)
+    } finally {
+      setProcessingRequests(prev => {
+        const s = new Set(prev)
+        s.delete(requestId)
+        return s
+      })
     }
   }
 
@@ -617,51 +699,48 @@ export default function FeedPage() {
 
         {/* LEFT SIDEBAR */}
         <div className="col-span-3 hidden lg:block">
-          <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 space-y-1 sticky top-24">
-            <button className="flex items-center gap-4 w-full p-3 hover:bg-gray-50 rounded-xl cursor-pointer font-bold text-gray-800 transition">
-              <Home size={24} className="text-green-600" /> Home
-            </button>
-            <div className="relative">
-              <button
-                onClick={() => setShowNoti(!showNoti)}
-                className="flex justify-between items-center w-full p-3 hover:bg-gray-50 rounded-xl cursor-pointer font-bold text-gray-800 transition"
-              >
-                <div className="flex gap-4 items-center">
-                  <Bell size={24} className="text-gray-600" /> Notifications
-                </div>
-              </button>
-            </div>
-          </div>
+          <SidebarNavigator activeTab={activeTab} setActiveTab={setActiveTab} requestsCount={requests.length} />
         </div>
 
         {/* CENTER FEED */}
         <div className="col-span-12 lg:col-span-6 space-y-6">
+          {activeTab === 'home' ? (
+            <>
+              <CreatePostBox
+                user={user}
+                postText={postText}
+                setPostText={setPostText}
+                postImages={postImages}
+                postImageRef={postImageRef}
+                handlePostImageChange={handlePostImageChange}
+                removePostImage={removePostImage}
+                handleCreatePost={handleCreatePost}
+                isPosting={isPosting}
+              />
 
-          <CreatePostBox
-            user={user}
-            postText={postText}
-            setPostText={setPostText}
-            postImages={postImages}
-            postImageRef={postImageRef}
-            handlePostImageChange={handlePostImageChange}
-            removePostImage={removePostImage}
-            handleCreatePost={handleCreatePost}
-            isPosting={isPosting}
-          />
-
-          <PostList
-            posts={posts}
-            user={user}
-            expandedComments={expandedComments}
-            toggleComments={toggleComments}
-            handleToggleLike={handleToggleLike}
-            handleDeletePost={handleDeletePost}
-            commentInputs={commentInputs}
-            setCommentInputs={setCommentInputs}
-            handlePostComment={handlePostComment}
-            handleDeleteComment={handleDeleteComment}
-            getImageUrl={getImageUrl}
-          />
+              <PostList
+                posts={posts}
+                user={user}
+                expandedComments={expandedComments}
+                toggleComments={toggleComments}
+                handleToggleLike={handleToggleLike}
+                handleDeletePost={handleDeletePost}
+                commentInputs={commentInputs}
+                setCommentInputs={setCommentInputs}
+                handlePostComment={handlePostComment}
+                handleDeleteComment={handleDeleteComment}
+                getImageUrl={getImageUrl}
+              />
+            </>
+          ) : (
+            <FriendRequestsPanel
+              requests={requests}
+              onAccept={handleAcceptRequest}
+              onReject={handleRejectRequest}
+              processingRequests={processingRequests}
+              getImageUrl={getImageUrl}
+            />
+          )}
         </div>
       </div>
     </div>
